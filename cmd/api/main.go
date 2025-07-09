@@ -48,6 +48,7 @@ func main() {
 		os.Exit(1)
 	}
 	app := &application{
+		config: cfg,
 		logger: logger,
 		models: data.NewModel(db),
 	}

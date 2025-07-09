@@ -36,6 +36,45 @@ func (app *application) showSongHandler(w http.ResponseWriter, r *http.Request) 
 
 }
 
+func (app *application) listSongsHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Name    string
+		Artist  string
+		SongURL string
+		data.Filters
+	}
+
+	v := validator.New()
+
+	qs := r.URL.Query()
+
+	input.Name = app.readString(qs, "name", "")
+	input.Artist = app.readString(qs, "artist", "")
+
+	input.Filters.Page = app.readInt(qs, "page", 1, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+	input.Filters.Sort = app.readString(qs, "sort", "id")
+	input.Filters.SortSafelist = []string{"id", "name", "artist", "-id", "-name", "-artist"}
+
+	if data.ValidateFilters(v, input.Filters); !v.Valid() {
+		app.failedInvalidationResponse(w, r, v.ErrorMap)
+		return
+	}
+
+	songs, err := app.models.SongModel.GetAll(input.Artist, input.Name, input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"songs": songs}, nil)
+
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+
+}
+
 func (app *application) uploadSongHandler(w http.ResponseWriter, r *http.Request) {
 	url, err := app.uploadS3(r, "file")
 	if err != nil {
@@ -51,10 +90,10 @@ func (app *application) uploadSongHandler(w http.ResponseWriter, r *http.Request
 
 func (app *application) createSongHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Artist    string
-		Name      string
-		Thumbnail string
-		SongURL   string
+		Artist    string `json:"artist"`
+		Name      string `json:"name"`
+		Thumbnail string `json:"thumbnail"`
+		SongURL   string `json:"song_url"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -136,9 +175,10 @@ func (app *application) updateSongHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	var input struct {
-		Artist    string `json:"artist"`
-		SongURL   string `json:"song_url"`
-		Thumbnail string `json:"thumbnail"`
+		Artist    *string `json:"artist"`
+		Name      *string `json:"name"`
+		SongURL   *string `json:"song_url"`
+		Thumbnail *string `json:"thumbnail"`
 	}
 
 	err = app.readJSON(w, r, &input)
@@ -147,9 +187,21 @@ func (app *application) updateSongHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	song.Artist = input.Artist
-	song.SongURL = input.SongURL
-	song.Thumbnail = input.Thumbnail
+	if input.Name != nil {
+		song.Name = *input.Name
+	}
+
+	if input.Artist != nil {
+		song.Artist = *input.Artist
+	}
+
+	if input.SongURL != nil {
+		song.SongURL = *input.SongURL
+	}
+
+	if input.Thumbnail != nil {
+		song.Thumbnail = *input.Thumbnail
+	}
 
 	v := validator.New()
 
@@ -160,10 +212,14 @@ func (app *application) updateSongHandler(w http.ResponseWriter, r *http.Request
 
 	err = app.models.SongModel.Update(song)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
 		return
 	}
-
 	err = app.writeJSON(w, http.StatusOK, envelope{"song": song}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)

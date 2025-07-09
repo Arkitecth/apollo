@@ -5,7 +5,10 @@ import (
 	"errors"
 )
 
-var ErrRecordNotFound = errors.New("no record found")
+var (
+	ErrRecordNotFound = errors.New("no record found")
+	ErrEditConflict   = errors.New("edit conflict")
+)
 
 type Model struct {
 	SongModel     *SongModel

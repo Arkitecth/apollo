@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -39,21 +40,25 @@ func (m *SongModel) Insert(song *Song) error {
 		  RETURNING id, created_at, version`
 
 	args := []any{song.Name, song.Artist, song.SongURL, song.Thumbnail}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	err := m.DB.QueryRow(query, args...).Scan(&song.ID, &song.Created_At, &song.Version)
-	if err != nil {
-		return nil
-	}
-	return nil
+	return m.DB.QueryRowContext(ctx, query, args...).Scan(&song.ID, &song.Created_At, &song.Version)
 }
 
 func (m *SongModel) Get(id int64) (*Song, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
 	query := `SELECT id, created_at, artist, song_url, thumbnail, version FROM songs
 		  WHERE id = $1 `
 
 	song := &Song{}
 
-	err := m.DB.QueryRow(query, id).Scan(
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
 		&song.ID,
 		&song.Created_At,
 		&song.Artist,
@@ -73,9 +78,55 @@ func (m *SongModel) Get(id int64) (*Song, error) {
 	return song, nil
 }
 
+func (m *SongModel) GetAll(artist string, name string, filters Filters) ([]*Song, error) {
+
+	query := `
+	SELECT id, created_at, artist, name, song_url, thumbnail, version 
+	FROM songs 
+	WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '') 
+	AND (genres @> 2 OR $2 = '{}')
+	ORDER BY id
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	songs := []*Song{}
+
+	for rows.Next() {
+		var song Song
+
+		err := rows.Scan(
+			&song.ID,
+			&song.Created_At,
+			&song.Name,
+			&song.Artist,
+			&song.Version,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		songs = append(songs, &song)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return songs, nil
+}
+
 func (m *SongModel) Update(song *Song) error {
 	query := `UPDATE songs SET artist = $1, thumbnail = $2, song_url = $3, version = version + 1
-	WHERE id = $4
+	WHERE id = $4 AND version = $5
 	RETURNING version`
 
 	args := []any{
@@ -83,17 +134,37 @@ func (m *SongModel) Update(song *Song) error {
 		song.Thumbnail,
 		song.SongURL,
 		song.ID,
+		song.Version,
 	}
 
-	return m.DB.QueryRow(query, args...).Scan(&song.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&song.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+
+	return nil
 
 }
 
 func (m *SongModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
 	query := `DELETE FROM songs
 		  WHERE id = $1 `
 
-	result, err := m.DB.Exec(query, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	result, err := m.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}

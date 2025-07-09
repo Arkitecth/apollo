@@ -1,5 +1,7 @@
 package validator
 
+import "slices"
+
 type Validator struct {
 	ErrorMap map[string]string
 }
@@ -31,4 +33,8 @@ func (v *Validator) Check(expr bool, key, value string) {
 	if expr {
 		v.Add(key, value)
 	}
+}
+
+func PermittedValue[T comparable](value T, permittedValues ...T) bool {
+	return slices.Contains(permittedValues, value)
 }
