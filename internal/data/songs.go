@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Arkitecth/apollo/validator"
@@ -80,18 +81,21 @@ func (m *SongModel) Get(id int64) (*Song, error) {
 
 func (m *SongModel) GetAll(artist string, name string, filters Filters) ([]*Song, error) {
 
-	query := `
+	query := fmt.Sprintf(`
 	SELECT id, created_at, artist, name, song_url, thumbnail, version 
 	FROM songs 
 	WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '') 
-	AND (genres @> 2 OR $2 = '{}')
-	ORDER BY id
-	`
+	AND (genres @> $2 OR $2 = '{}')
+	ORDER BY %s %s, id ASC
+	LIMIT $3 OFFSET $4
+	`, filters.sortColumn(), filters.sortDirection())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := m.DB.QueryContext(ctx, query)
+	args := []any{artist, name, filters.limit(), filters.offset()}
+
+	rows, err := m.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
