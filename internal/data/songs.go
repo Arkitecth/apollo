@@ -127,6 +127,40 @@ func (m *SongModel) GetAll(artist string, name string, filters Filters) ([]*Song
 
 	return songs, nil
 }
+func (m *SongModel) GetAllSongs(playlistID int64) ([]*Song, error) {
+	query := `SELECT songs.id, songs.created_at, songs.name, songs.song_url, songs.artist, songs.thumbnail, version 
+		  FROM playlist_songs
+		  WHERE playlist_id = $1
+		  INNER JOIN playlistsongs ON songs.id = playlistsongs.song_id`
+
+	rows, err := m.DB.Query(query, playlistID)
+	if err != nil {
+		return nil, err
+	}
+	songs := []*Song{}
+	for rows.Next() {
+		var song Song
+
+		err := rows.Scan(
+			&song.ID,
+			&song.Created_At,
+			&song.Name,
+			&song.Artist,
+			&song.Version,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		songs = append(songs, &song)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
 
 func (m *SongModel) Update(song *Song) error {
 	query := `UPDATE songs SET artist = $1, thumbnail = $2, song_url = $3, version = version + 1

@@ -28,6 +28,16 @@ func (app *application) readIDParam(r *http.Request) (int64, error) {
 	return id, nil
 
 }
+func (app *application) readParamID(r *http.Request, key string) (int64, error) {
+	params := httprouter.ParamsFromContext(r.Context())
+	id, err := strconv.ParseInt(params.ByName(key), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, errors.New("invalid id")
+	}
+
+	return id, nil
+
+}
 
 type envelope map[string]any
 
@@ -83,7 +93,7 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any
 		case errors.Is(err, io.EOF):
 			return fmt.Errorf("body must not be empty")
 
-		case strings.HasPrefix(err.Error(), "json: unknown field"):
+		case strings.HasPrefix(err.Error(), "json: unknown field "):
 			field := strings.TrimPrefix(err.Error(), "json: unknown field ")
 			return fmt.Errorf("body contains unknown field %q", field)
 		}

@@ -63,7 +63,9 @@ func main() {
 	}
 	logger.Info("database connection successfully established")
 	err = app.serve()
-	app.logger.Error(err.Error())
+	if err != nil {
+		app.logger.Error(err.Error())
+	}
 	os.Exit(1)
 
 }

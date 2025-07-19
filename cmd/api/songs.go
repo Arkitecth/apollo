@@ -38,9 +38,8 @@ func (app *application) showSongHandler(w http.ResponseWriter, r *http.Request) 
 
 func (app *application) listSongsHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Name    string
-		Artist  string
-		SongURL string
+		Name   string
+		Artist string
 		data.Filters
 	}
 
@@ -143,9 +142,11 @@ func (app *application) deleteSongHandler(w http.ResponseWriter, r *http.Request
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
 			app.notFoundResponse(w, r)
+			return
 
 		default:
 			app.serverErrorResponse(w, r, err)
+			return
 		}
 	}
 

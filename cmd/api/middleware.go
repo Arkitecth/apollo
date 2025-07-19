@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/tomasen/realip"
-	"golang.org/x/time/rate"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/tomasen/realip"
+	"golang.org/x/time/rate"
 )
 
 func (app *application) recoverPanic(next http.Handler) http.Handler {
@@ -31,10 +32,13 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 		mu      sync.Mutex
 		clients = make(map[string]*client)
 	)
+
 	go func() {
 		for {
 			time.Sleep(time.Minute)
+
 			mu.Lock()
+
 			for ip, client := range clients {
 				if time.Since(client.lastSeen) > 3*time.Minute {
 					delete(clients, ip)
@@ -46,11 +50,10 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if app.config.limiter.enabled {
 			ip := realip.FromRequest(r)
-
 			mu.Lock()
-
-			if _, found := clients[ip]; !found {
-				clients[ip] = &client{limiter: rate.NewLimiter(2, 4)}
+			if _, ok := clients[ip]; !ok {
+				rateLimiter := rate.NewLimiter(rate.Limit(app.config.limiter.rps), app.config.limiter.burst)
+				clients[ip] = &client{limiter: rateLimiter}
 			}
 
 			clients[ip].lastSeen = time.Now()
@@ -61,7 +64,7 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 				return
 			}
 			mu.Unlock()
+			next.ServeHTTP(w, r)
 		}
-		next.ServeHTTP(w, r)
 	})
 }
