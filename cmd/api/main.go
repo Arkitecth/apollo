@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Arkitecth/apollo/internal/data"
+	"github.com/Arkitecth/apollo/internal/mailer"
 	_ "github.com/lib/pq"
 )
 
@@ -28,12 +29,21 @@ type config struct {
 		burst   int
 		enabled bool
 	}
+
+	smtp struct {
+		host     string
+		port     int
+		username string
+		password string
+		sender   string
+	}
 }
 
 type application struct {
 	config config
 	logger *slog.Logger
 	models data.Model
+	mailer mailer.Mailer
 }
 
 func main() {
@@ -48,6 +58,11 @@ func main() {
 	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
 
+	flag.StringVar(&cfg.smtp.host, "smtp-host", "sandbox.smtp.mailtrap.io", "SMTP host")
+	flag.IntVar(&cfg.smtp.port, "smtp-port", 2525, "SMTP port")
+	flag.StringVar(&cfg.smtp.username, "smtp-username", "e917c373af0305", "SMTP username")
+	flag.StringVar(&cfg.smtp.password, "smtp-password", "5d2eaf9ed8c402", "SMTP password")
+	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Alchemist <no-reply@apollo.xero.net>", "SMTP Sender")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -60,6 +75,7 @@ func main() {
 		config: cfg,
 		logger: logger,
 		models: data.NewModel(db),
+		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 	logger.Info("database connection successfully established")
 	err = app.serve()

@@ -3,31 +3,31 @@ package mailer
 import (
 	"bytes"
 	"embed"
-	"text/template"
+	"html/template"
 	"time"
 
 	"github.com/go-mail/mail/v2"
 )
 
+//go:embed "template"
 var templateFS embed.FS
 
 type Mailer struct {
-	dailer *mail.Dialer
+	dialer *mail.Dialer
 	sender string
 }
 
 func New(host string, port int, username, password, sender string) Mailer {
-	dailer := mail.NewDialer(host, port, username, password)
-	dailer.Timeout = 5 * time.Second
+	dialer := mail.NewDialer(host, port, username, password)
+	dialer.Timeout = 5 * time.Second
 
 	return Mailer{
-		dailer: dailer,
+		dialer: dialer,
 		sender: sender,
 	}
 }
 
-func (m Mailer) Send(recipient, templateFile string, data any) error {
-
+func (m Mailer) Send(recipient string, templateFile string, data any) error {
 	tmpl, err := template.New("email").ParseFS(templateFS, "templates/"+templateFile)
 	if err != nil {
 		return err
@@ -38,8 +38,9 @@ func (m Mailer) Send(recipient, templateFile string, data any) error {
 	if err != nil {
 		return err
 	}
+
 	plainBody := new(bytes.Buffer)
-	err = tmpl.ExecuteTemplate(subject, "subject", data)
+	err = tmpl.ExecuteTemplate(plainBody, "plainBody", data)
 	if err != nil {
 		return err
 	}
@@ -57,11 +58,10 @@ func (m Mailer) Send(recipient, templateFile string, data any) error {
 	msg.SetBody("text/plain", plainBody.String())
 	msg.AddAlternative("text/html", htmlBody.String())
 
-	err = m.dailer.DialAndSend(msg)
+	err = m.dialer.DialAndSend(msg)
 	if err != nil {
 		return err
 	}
 
 	return nil
-
 }
