@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/Arkitecth/apollo/internal/data"
@@ -44,6 +45,7 @@ type application struct {
 	logger *slog.Logger
 	models data.Model
 	mailer mailer.Mailer
+	wg     sync.WaitGroup
 }
 
 func main() {
@@ -62,7 +64,7 @@ func main() {
 	flag.IntVar(&cfg.smtp.port, "smtp-port", 2525, "SMTP port")
 	flag.StringVar(&cfg.smtp.username, "smtp-username", "e917c373af0305", "SMTP username")
 	flag.StringVar(&cfg.smtp.password, "smtp-password", "5d2eaf9ed8c402", "SMTP password")
-	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Alchemist <no-reply@apollo.xero.net>", "SMTP Sender")
+	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Apollo <no-reply@apollo.xero.net>", "SMTP Sender")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))

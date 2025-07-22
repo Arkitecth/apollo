@@ -16,7 +16,6 @@ import (
 	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/julienschmidt/httprouter"
-	"golang.org/x/tools/go/analysis/passes/nilfunc"
 )
 
 func (app *application) readIDParam(r *http.Request) (int64, error) {
@@ -169,7 +168,9 @@ func (app *application) readInt(qs url.Values, key string, defaultValue int, v *
 }
 
 func (app *application) background(fn func()) {
+	app.wg.Add(1)
 	go func() {
+		defer app.wg.Done()
 		defer func() {
 			if err := recover(); err != nil {
 				app.logger.Error(fmt.Sprintf("%v", err))

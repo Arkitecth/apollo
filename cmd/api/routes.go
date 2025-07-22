@@ -21,16 +21,20 @@ func (app *application) routes() http.Handler {
 
 	//Users
 	router.HandlerFunc(http.MethodPost, "/v1/users", app.registerUserHandler)
+	router.HandlerFunc(http.MethodPut, "/v1/users/activated", app.activateUserHandler)
 
 	//Playlist
-	router.HandlerFunc(http.MethodGet, "/v1/playlists/show/playlist/:id", app.showPlaylistHandler)
-	router.HandlerFunc(http.MethodPost, "/v1/playlists/create/playlist", app.createPlaylistHandler)
-	router.HandlerFunc(http.MethodDelete, "/v1/playlists/delete/playlist/:id", app.deletePlaylistHandler)
-	router.HandlerFunc(http.MethodGet, "/v1/playlists/list/playlist", app.listPlaylistHandler) // Needs to be able to get Authenticated User ID Playlist ID
+	router.HandlerFunc(http.MethodGet, "/v1/playlists/show/playlist/:id", app.requireActivatedUser(app.showPlaylistHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/playlists/create/playlist", app.requireActivatedUser(app.createPlaylistHandler))
+	router.HandlerFunc(http.MethodDelete, "/v1/playlists/delete/playlist/:id", app.requireActivatedUser(app.deletePlaylistHandler))
+	router.HandlerFunc(http.MethodGet, "/v1/playlists/list/playlist", app.requireActivatedUser(app.listPlaylistHandler))
 
-	router.HandlerFunc(http.MethodPost, "/v1/playlists/add/songs", app.addSongToPlaylistHandler)
-	router.HandlerFunc(http.MethodDelete, "/v1/playlists/remove/songs/:song_id/:playlist_id", app.removeSongFromPlaylistHandler)
-	router.HandlerFunc(http.MethodGet, "/v1/playlists/show/songs/:id", app.showSongsFromPlaylistHandler)
+	router.HandlerFunc(http.MethodPost, "/v1/playlists/add/songs", app.requireActivatedUser(app.addSongToPlaylistHandler))
+	router.HandlerFunc(http.MethodDelete, "/v1/playlists/remove/songs/:song_id/:playlist_id", app.requireActivatedUser(app.removeSongFromPlaylistHandler))
+	router.HandlerFunc(http.MethodGet, "/v1/playlists/show/songs/:id", app.requireActivatedUser(app.showSongsFromPlaylistHandler))
 
-	return app.recoverPanic(app.rateLimit(router))
+	//Tokens
+	router.HandlerFunc(http.MethodPost, "/v1/tokens/authentication", app.createAuthenticationTokenHandler)
+
+	return app.recoverPanic(app.rateLimit(app.authenticate(router)))
 }

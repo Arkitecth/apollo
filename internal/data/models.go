@@ -14,6 +14,7 @@ type Model struct {
 	SongModel     SongModel
 	PlaylistModel PlaylistModel
 	UserModel     UserModel
+	TokenModel    TokenModel
 }
 
 func NewModel(db *sql.DB) Model {
@@ -25,6 +26,10 @@ func NewModel(db *sql.DB) Model {
 			DB: db,
 		},
 		UserModel: UserModel{
+			DB: db,
+		},
+
+		TokenModel: TokenModel{
 			DB: db,
 		},
 	}

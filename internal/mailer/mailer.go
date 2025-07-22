@@ -9,7 +9,7 @@ import (
 	"github.com/go-mail/mail/v2"
 )
 
-//go:embed "template"
+//go:embed "templates"
 var templateFS embed.FS
 
 type Mailer struct {

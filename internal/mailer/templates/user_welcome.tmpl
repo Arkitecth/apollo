@@ -9,6 +9,11 @@ Thanks for signing up for an Apollo account. We're excited to have you on board!
 For future reference, your user ID number is {{.ID}}. 
 
 
+{{"token": "{{.activationToken}}"}
+
+
+Please note that this is a one-time use token and it will expire in 3 days. 
+
 Thanks, 
 
 The Apollo Team
@@ -17,9 +22,7 @@ The Apollo Team
 
 
 {{define "htmlBody"}}
-
 <!doctype html> 
-
 <html> 
 <head>
 	<meta name="viewport", content="width=device-width" />

@@ -2,7 +2,6 @@
 
 A Music Player Server that allows users to upload songs and create playlists
 
-
 ## Tech Stack 
 - Go 
 - S3
