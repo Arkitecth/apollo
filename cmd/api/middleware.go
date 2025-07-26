@@ -2,15 +2,18 @@ package main
 
 import (
 	"errors"
+	"expvar"
 	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/Arkitecth/apollo/internal/data"
 	"github.com/Arkitecth/apollo/validator"
 	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
-	"net/http"
-	"strings"
-	"sync"
-	"time"
 )
 
 func (app *application) recoverPanic(next http.Handler) http.Handler {
@@ -67,8 +70,8 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 				return
 			}
 			mu.Unlock()
-			next.ServeHTTP(w, r)
 		}
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -117,7 +120,7 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) requireActivatedUser(next http.HandlerFunc) http.HandlerFunc {
+func (app *application) requireAuthenticatedUser(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := app.getUserContext(r)
 		if user.IsAnonymous() {
@@ -125,11 +128,135 @@ func (app *application) requireActivatedUser(next http.HandlerFunc) http.Handler
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+
+}
+
+func (app *application) requireActivatedUser(next http.HandlerFunc) http.HandlerFunc {
+	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := app.getUserContext(r)
 		if !user.Activated {
 			app.inactiveAccountResponse(w, r)
 			return
 		}
 
 		next.ServeHTTP(w, r)
+	})
+
+	return app.requireAuthenticatedUser(fn)
+}
+
+func (app *application) requireAuthorizedUser(code string, next http.HandlerFunc) http.HandlerFunc {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		user := app.getUserContext(r)
+
+		permissions, err := app.models.PermissionModel.GetAllForUser(user.ID)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
+
+		if !permissions.Include(code) {
+			app.notAuthorizedResponse(w, r)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
+
+	return app.requireActivatedUser(fn)
+
+}
+
+func (app *application) enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Vary", "Origin")
+
+		w.Header().Set("Vary", "Access-Control-Request-Method")
+
+		origin := r.Header.Get("Origin")
+
+		if origin != "" {
+			for i := range len(app.config.cors.trustedOrigins) {
+				if origin == app.config.cors.trustedOrigins[i] {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+
+					if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+						w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, PATCH, PUT, DELETE")
+						w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+
+						w.WriteHeader(http.StatusOK)
+						return
+					}
+
+					break
+				}
+
+			}
+
+		}
+
+		next.ServeHTTP(w, r)
+	})
+
+}
+
+type metricsWriter struct {
+	wrappedWriter http.ResponseWriter
+	headerWritten bool
+	status        int
+}
+
+func NewMetricsWriter(w http.ResponseWriter) *metricsWriter {
+	return &metricsWriter{
+		wrappedWriter: w,
+		status:        http.StatusOK,
+	}
+}
+
+func (mw *metricsWriter) Header() http.Header {
+	return mw.wrappedWriter.Header()
+}
+
+func (mw *metricsWriter) Write(p []byte) (int, error) {
+	mw.headerWritten = true
+	return mw.wrappedWriter.Write(p)
+}
+
+func (mw *metricsWriter) WriteHeader(statusCode int) {
+	mw.wrappedWriter.WriteHeader(statusCode)
+
+	if !mw.headerWritten {
+		mw.status = statusCode
+		mw.headerWritten = true
+	}
+}
+func (mw *metricsWriter) Unwrap() http.ResponseWriter {
+	return mw.wrappedWriter
+}
+
+func (app *application) metrics(next http.Handler) http.Handler {
+	var (
+		totalRequestsReceived           = expvar.NewInt("total_requests_received")
+		totalResponsesSent              = expvar.NewInt("total_responses_sent")
+		totalProcessingTimeMicroseconds = expvar.NewInt("total_processing_time_μs")
+		totalResponsesSentByStatus      = expvar.NewMap("total_responses_sent_by_status")
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		mw := NewMetricsWriter(w)
+
+		totalRequestsReceived.Add(1)
+
+		next.ServeHTTP(mw, r)
+
+		totalResponsesSent.Add(1)
+
+		totalResponsesSentByStatus.Add(strconv.Itoa(mw.status), 1)
+
+		duration := time.Since(start).Nanoseconds()
+		totalProcessingTimeMicroseconds.Set(duration)
 	})
 }

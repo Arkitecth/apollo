@@ -15,6 +15,7 @@ func (app *application) showSongHandler(w http.ResponseWriter, r *http.Request) 
 		app.notFoundResponse(w, r)
 		return
 	}
+
 	song, err := app.models.SongModel.Get(id)
 	if err != nil {
 		switch {

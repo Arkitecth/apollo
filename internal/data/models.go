@@ -11,10 +11,11 @@ var (
 )
 
 type Model struct {
-	SongModel     SongModel
-	PlaylistModel PlaylistModel
-	UserModel     UserModel
-	TokenModel    TokenModel
+	SongModel       SongModel
+	PlaylistModel   PlaylistModel
+	UserModel       UserModel
+	TokenModel      TokenModel
+	PermissionModel PermissionModel
 }
 
 func NewModel(db *sql.DB) Model {
@@ -30,6 +31,10 @@ func NewModel(db *sql.DB) Model {
 		},
 
 		TokenModel: TokenModel{
+			DB: db,
+		},
+
+		PermissionModel: PermissionModel{
 			DB: db,
 		},
 	}

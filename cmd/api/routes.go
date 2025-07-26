@@ -1,6 +1,7 @@
 package main
 
 import (
+	"expvar"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
@@ -12,9 +13,9 @@ func (app *application) routes() http.Handler {
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
-	router.HandlerFunc(http.MethodDelete, "/v1/songs/:id", app.deleteSongHandler)
-	router.HandlerFunc(http.MethodPost, "/v1/songs", app.createSongHandler)
-	router.HandlerFunc(http.MethodPost, "/v1/upload/songs", app.uploadSongHandler)
+	router.HandlerFunc(http.MethodDelete, "/v1/songs/:id", app.requireAuthorizedUser("songs:delete", app.deleteSongHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/songs", app.requireAuthorizedUser("songs:create", app.createSongHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/upload/songs", app.requireAuthorizedUser("songs:upload", app.uploadSongHandler))
 
 	router.HandlerFunc(http.MethodGet, "/v1/songs/:id", app.showSongHandler)
 	router.HandlerFunc(http.MethodGet, "/v1/songs", app.listSongsHandler)
@@ -36,5 +37,7 @@ func (app *application) routes() http.Handler {
 	//Tokens
 	router.HandlerFunc(http.MethodPost, "/v1/tokens/authentication", app.createAuthenticationTokenHandler)
 
-	return app.recoverPanic(app.rateLimit(app.authenticate(router)))
+	router.Handler(http.MethodGet, "/debug/vars", expvar.Handler())
+
+	return app.metrics(app.recoverPanic(app.enableCORS(app.rateLimit(app.authenticate(router)))))
 }

@@ -53,6 +53,13 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 		}
 		return
 	}
+
+	err = app.models.PermissionModel.AddForUsers(user.ID, "songs:read")
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
 	token, err := app.models.TokenModel.New(user.ID, 3*24*time.Hour, "activation")
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
